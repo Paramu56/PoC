@@ -1,0 +1,60 @@
+body {
+  font-family: Arial, sans-serif;
+  margin: 24px;
+  max-width: 980px;
+}
+
+h1 {
+  margin-bottom: 8px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+label {
+  font-size: 13px;
+  color: #333;
+  display: block;
+  margin-bottom: 4px;
+}
+
+input,
+select,
+textarea,
+button {
+  width: 100%;
+  padding: 8px;
+  box-sizing: border-box;
+}
+
+textarea {
+  min-height: 90px;
+}
+
+.full {
+  grid-column: 1 / -1;
+}
+
+.card {
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 14px;
+  margin-top: 14px;
+}
+
+.muted {
+  color: #666;
+  font-size: 13px;
+}
+
+.row {
+  margin-top: 10px;
+}
+
+button {
+  cursor: pointer;
+}
+

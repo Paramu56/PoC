@@ -1,0 +1,152 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Karnataka Schemes RAG</title>
+  <link rel="stylesheet" href="/static/style.css"/>
+</head>
+<body>
+  <h1>Scheme Finder (RAG)</h1>
+  <div class="muted">Local Chroma + SentenceTransformer + Gemini orchestration</div>
+
+  <div class="card">
+    <div class="grid">
+      <div>
+        <label>Name</label>
+        <input id="name" type="text" placeholder="Optional"/>
+      </div>
+
+      <div>
+        <label>Gender</label>
+        <select id="gender">
+          <option value="">Select</option>
+          <option>Male</option>
+          <option>Female</option>
+          <option>Transgender</option>
+        </select>
+      </div>
+
+      <div>
+        <label>Age</label>
+        <input id="age" type="number" min="0" max="120" placeholder="Optional"/>
+      </div>
+
+      <div>
+        <label>Caste</label>
+        <select id="caste">
+          <option value="">Select</option>
+          <option>General</option>
+          <option>SC</option>
+          <option>ST</option>
+          <option>OBC</option>
+          <option>PVTG</option>
+          <option>DNT</option>
+        </select>
+      </div>
+
+      <div>
+        <label>Residence</label>
+        <select id="residence">
+          <option value="">Select</option>
+          <option>Rural</option>
+          <option>Urban</option>
+        </select>
+      </div>
+
+      <div>
+        <label>Marital Status</label>
+        <select id="marital_status">
+          <option value="">Select</option>
+          <option>Married</option>
+          <option>Never married</option>
+          <option>Widowed</option>
+          <option>Divorced</option>
+          <option>Separated</option>
+        </select>
+      </div>
+
+      <div>
+        <label>Disability percentage</label>
+        <input id="disability_percentage" type="number" min="0" max="100" placeholder="Optional"/>
+      </div>
+
+      <div>
+        <label>Employment Status</label>
+        <select id="employment_status">
+          <option value="">Select</option>
+          <option>Unemployed</option>
+          <option>Employed</option>
+          <option>Self-Employed/Entrepreneur</option>
+        </select>
+      </div>
+
+      <div>
+        <label>Occupation</label>
+        <select id="occupation">
+          <option value="">Select</option>
+          <option>Artisans/Spinners/Weavers</option>
+          <option>Artists</option>
+          <option>Construction Worker</option>
+          <option>Ex-Serviceman</option>
+          <option>Farmer</option>
+          <option>Fisherman</option>
+          <option>Health Worker</option>
+          <option>Khadi Artisan</option>
+          <option>Safai Karamchari</option>
+          <option>Sportsperson</option>
+          <option>Street vendor</option>
+          <option>Student</option>
+          <option>Teacher/Faculty</option>
+          <option>Unorganized worker</option>
+          <option>Government employee</option>
+        </select>
+      </div>
+
+      <div>
+        <label>Minority</label>
+        <select id="minority">
+          <option value="">Select</option>
+          <option>Yes</option>
+          <option>No</option>
+        </select>
+      </div>
+
+      <div>
+        <label>Below Poverty Line</label>
+        <select id="below_poverty_line">
+          <option value="">Select</option>
+          <option>Yes</option>
+          <option>No</option>
+        </select>
+      </div>
+
+      <div>
+        <label>Economic Distress</label>
+        <select id="economic_distress">
+          <option value="">Select</option>
+          <option>Yes</option>
+          <option>No</option>
+        </select>
+      </div>
+
+      <div class="full">
+        <label>Question</label>
+        <textarea id="question" placeholder="Example: I am an artisan. What help can I get?"></textarea>
+      </div>
+
+      <div class="full">
+        <button id="askBtn" type="button">Find Schemes</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="status" class="row muted"></div>
+  <div id="answer" class="card" style="display:none;"></div>
+  <div id="citations" class="card" style="display:none;"></div>
+  <div id="debug" class="card" style="display:none;"></div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
+
