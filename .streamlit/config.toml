@@ -1,0 +1,4 @@
+# Avoid scanning site-packages (e.g. transformers -> torchvision) which spams errors
+# when SentenceTransformers/Chroma are installed without torchvision.
+[server]
+fileWatcherType = "none"

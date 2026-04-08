@@ -9,11 +9,21 @@ import chromadb
 from chromadb.utils import embedding_functions
 from pypdf import PdfReader
 
+from graph_knowledge import (
+    DATA_DIR,
+    DEFAULT_CYPHER_PATH,
+    GRAPH_COMPILED_PATH,
+    compile_cypher_file,
+    save_compiled_graph,
+)
+
 
 DEFAULT_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 DEFAULT_COLLECTION = "schemes-db"
 DEFAULT_DB_PATH = "./chroma_schemes_db"
-DEFAULT_PDF_BASENAME = "karnataka-schemes-list.pdf"
+# Preferred PDF in project data folder (see data/README.txt)
+DEFAULT_PDF_IN_DATA = os.path.join(DATA_DIR, "Karnataka Schemes.pdf")
+LEGACY_DOWNLOADS_BASENAME = "karnataka-schemes-list.pdf"
 
 
 @dataclass(frozen=True)
@@ -24,6 +34,7 @@ class SchemeChunk:
     category: Optional[str] = None
     level_for: Optional[str] = None
     tags: Optional[str] = None
+    ingest_mode: str = "scheme_blocks"  # or "page_fallback"
 
 
 def _clean_page_text(text: str) -> str:
@@ -116,6 +127,22 @@ def parse_page_into_scheme_chunks(page_num: int, page_text: str) -> List[SchemeC
     return chunks
 
 
+def parse_page_fallback_chunks(page_num: int, page_text: str) -> List[SchemeChunk]:
+    """
+    When the PDF does not follow 'title + Category:' blocks, ingest whole-page text
+    so nothing is lost. Scheme label is synthetic for citation (page still correct).
+    """
+    title = f"Karnataka Schemes (page {page_num})"
+    return [
+        SchemeChunk(
+            scheme_name=title,
+            text=page_text.strip(),
+            page=page_num,
+            ingest_mode="page_fallback",
+        )
+    ]
+
+
 def chunk_text(text: str, max_chars: int = 2400, overlap: int = 200) -> List[str]:
     """
     Simple character-based chunker (works fine for English scheme descriptions).
@@ -149,10 +176,26 @@ def _stable_id(*parts: str) -> str:
     return h.hexdigest()[:32]
 
 
-def ingest(pdf_path: str, db_path: str, collection_name: str, model_name: str) -> None:
+def ingest(
+    pdf_path: str,
+    db_path: str,
+    collection_name: str,
+    model_name: str,
+    *,
+    fresh: bool = False,
+) -> None:
     print(f"[0/5] Initializing Chroma collection '{collection_name}' at: {os.path.abspath(db_path)}")
     ef = embedding_functions.SentenceTransformerEmbeddingFunction(model_name=model_name)
     chroma_client = chromadb.PersistentClient(path=db_path)
+
+    if fresh:
+        try:
+            chroma_client.delete_collection(name=collection_name)
+            print(f"  - removed old collection '{collection_name}' (only new PDF data will remain)")
+        except Exception:
+            # Collection may not exist yet on first run
+            pass
+
     collection = chroma_client.get_or_create_collection(
         name=collection_name,
         embedding_function=ef,
@@ -163,8 +206,10 @@ def ingest(pdf_path: str, db_path: str, collection_name: str, model_name: str) -
         existing = collection.count()
     except Exception:
         existing = None
-    if existing is not None:
+    if existing is not None and not fresh:
         print(f"  - existing chunks already in collection: {existing}")
+    elif fresh:
+        print("  - collection is empty; ingesting from scratch")
     print(f"  - embedding model: {model_name}")
 
     pages = extract_pages(pdf_path)
@@ -172,14 +217,17 @@ def ingest(pdf_path: str, db_path: str, collection_name: str, model_name: str) -
     all_scheme_chunks: List[SchemeChunk] = []
     for page_num, text in pages:
         all_scheme_chunks.extend(parse_page_into_scheme_chunks(page_num, text))
-    unique_schemes_set = {sc.scheme_name for sc in all_scheme_chunks}
-    print(f"  - detected scheme entries: {len(all_scheme_chunks)}")
-    print(f"  - unique scheme names: {len(unique_schemes_set)}")
 
     if not all_scheme_chunks:
-        raise SystemExit(
-            "No schemes were detected. If the PDF layout differs, we may need to adjust the parsing heuristic."
-        )
+        print("  - no 'Category:' blocks found; falling back to per-page chunks")
+        for page_num, text in pages:
+            all_scheme_chunks.extend(parse_page_fallback_chunks(page_num, text))
+    if not all_scheme_chunks:
+        raise SystemExit("No text could be extracted from the PDF.")
+
+    unique_schemes_set = {sc.scheme_name for sc in all_scheme_chunks}
+    print(f"  - scheme entries to embed: {len(all_scheme_chunks)}")
+    print(f"  - unique scheme labels: {len(unique_schemes_set)}")
 
     print("[3/5] Chunking schemes and preparing records...")
     documents: List[str] = []
@@ -200,13 +248,14 @@ def ingest(pdf_path: str, db_path: str, collection_name: str, model_name: str) -
                     "tags": sc.tags,
                     "source": os.path.abspath(pdf_path),
                     "chunk_index": chunk_idx,
+                    "ingest_mode": sc.ingest_mode,
                 }
             )
             ids.append(doc_id)
 
     print(f"  - prepared chunks: {len(documents)}")
 
-    print("[4/5] Writing to Chroma (idempotent; safe to re-run)...")
+    print("[4/5] Writing to Chroma..." + (" (full replace)" if fresh else " (idempotent upsert)"))
     # Prefer upsert (add if new, replace if exists).
     # If upsert isn't supported, delete existing ids then add (still idempotent).
     try:
@@ -241,23 +290,41 @@ def ingest(pdf_path: str, db_path: str, collection_name: str, model_name: str) -
         print(f"Collection count now: {final_count}")
 
 
-def _default_pdf_path() -> str:
-    user_profile = os.environ.get("USERPROFILE") or os.path.expanduser("~")
-    return os.path.join(user_profile, "Downloads", DEFAULT_PDF_BASENAME)
-
-
-def _find_pdf_in_downloads() -> str:
+def _find_schemes_pdf(explicit_pdf: Optional[str]) -> str:
     """
-    Avoid interactive `input()` (Cursor "Run" sometimes has no stdin).
-    We try the default PDF path first; if missing, we look for similarly
-    named files in Downloads and pick the best match.
+    Resolution order:
+    1) --pdf path if provided
+    2) data/Karnataka Schemes.pdf (recommended)
+    3) any single .pdf under data/
+    4) Downloads/karnataka-schemes-list.pdf (legacy)
+    5) any single match in Downloads starting with karnataka-schemes-list
     """
+    if explicit_pdf and explicit_pdf.strip():
+        return explicit_pdf.strip().strip('"')
+
+    if os.path.isfile(DEFAULT_PDF_IN_DATA):
+        return DEFAULT_PDF_IN_DATA
+
+    data_pdfs: List[str] = []
+    if os.path.isdir(DATA_DIR):
+        for name in os.listdir(DATA_DIR):
+            if name.lower().endswith(".pdf"):
+                data_pdfs.append(os.path.join(DATA_DIR, name))
+    if len(data_pdfs) == 1:
+        return data_pdfs[0]
+    if len(data_pdfs) > 1:
+        print(f"Multiple PDFs in {DATA_DIR}. Put your main file as:")
+        print(f"  {DEFAULT_PDF_IN_DATA}")
+        print("Or pass: --pdf <path>")
+        for p in sorted(data_pdfs)[:15]:
+            print(f" - {p}")
+        raise SystemExit(2)
+
     downloads_dir = os.path.join(os.environ.get("USERPROFILE") or os.path.expanduser("~"), "Downloads")
-    default_path = os.path.join(downloads_dir, DEFAULT_PDF_BASENAME)
-    if os.path.exists(default_path):
-        return default_path
+    legacy = os.path.join(downloads_dir, LEGACY_DOWNLOADS_BASENAME)
+    if os.path.isfile(legacy):
+        return legacy
 
-    # Fallback: look for files starting with "karnataka-schemes-list" in Downloads.
     candidates: List[str] = []
     try:
         for name in os.listdir(downloads_dir):
@@ -266,28 +333,22 @@ def _find_pdf_in_downloads() -> str:
                 if os.path.isfile(full_path):
                     candidates.append(full_path)
     except Exception:
-        # If we can't list, we'll just fail with a clear error below.
         candidates = []
 
-    # Prefer PDFs over non-PDFs if present.
     pdf_candidates = [p for p in candidates if p.lower().endswith(".pdf")]
     preferred = pdf_candidates if pdf_candidates else candidates
-
     if len(preferred) == 1:
         return preferred[0]
 
-    if len(preferred) > 1:
-        print("Could not determine which file to ingest automatically.")
-        print(f"Expected default: {default_path}")
+    print("PDF not found. Do one of the following:")
+    print(f"  1) Copy your file to: {DEFAULT_PDF_IN_DATA}")
+    print("  2) Or run: python ingest_karnataka_schemes.py --pdf \"C:\\path\\to\\file.pdf\"")
+    if preferred:
         print("Found multiple candidates in Downloads:")
         for p in sorted(preferred)[:10]:
             print(f" - {p}")
-        print("Re-run with `--pdf <full_path>` to select the correct file.")
-        raise SystemExit(2)
-
-    raise SystemExit(
-        2
-    )
+        print("Re-run with --pdf <full_path>")
+    raise SystemExit(2)
 
 
 def main() -> None:
@@ -295,19 +356,47 @@ def main() -> None:
     ap.add_argument(
         "--pdf",
         required=False,
-        # Avoid `%USERPROFILE%` in argparse help: argparse may treat `%...` like formatting placeholders.
-        help=f"Path to the schemes PDF (default: USERPROFILE\\Downloads\\{DEFAULT_PDF_BASENAME})",
+        help=f"Path to schemes PDF (default: {DEFAULT_PDF_IN_DATA} if present)",
     )
     ap.add_argument("--db-path", default=DEFAULT_DB_PATH, help="Chroma persistent directory path.")
     ap.add_argument("--collection", default=DEFAULT_COLLECTION, help="Chroma collection name.")
     ap.add_argument("--model", default=DEFAULT_MODEL, help="SentenceTransformer model name or local path.")
+    ap.add_argument(
+        "--cypher",
+        default=DEFAULT_CYPHER_PATH,
+        help=f"Path to schemes.cypher for graph rules (default: {DEFAULT_CYPHER_PATH})",
+    )
+    ap.add_argument(
+        "--no-cypher",
+        action="store_true",
+        help="Skip compiling schemes.cypher to graph_compiled.json",
+    )
+    ap.add_argument(
+        "--fresh",
+        action="store_true",
+        help="Delete the Chroma collection first so ONLY this PDF is indexed (removes all old chunks).",
+    )
     args = ap.parse_args()
 
-    pdf_path = args.pdf or _find_pdf_in_downloads()
+    pdf_path = _find_schemes_pdf(args.pdf)
     if not os.path.exists(pdf_path):
         raise SystemExit(f"PDF not found: {pdf_path}")
 
-    ingest(pdf_path=pdf_path, db_path=args.db_path, collection_name=args.collection, model_name=args.model)
+    ingest(
+        pdf_path=pdf_path,
+        db_path=args.db_path,
+        collection_name=args.collection,
+        model_name=args.model,
+        fresh=args.fresh,
+    )
+
+    if not args.no_cypher and os.path.isfile(args.cypher):
+        print(f"[graph] Compiling Cypher: {args.cypher}")
+        compiled = compile_cypher_file(args.cypher)
+        save_compiled_graph(compiled, GRAPH_COMPILED_PATH)
+        print(f"[graph] Wrote {compiled.get('count', 0)} statements -> {GRAPH_COMPILED_PATH}")
+    elif not args.no_cypher:
+        print(f"[graph] No Cypher file at {args.cypher} (optional). Add data/schemes.cypher to enable graph context.")
 
 
 if __name__ == "__main__":

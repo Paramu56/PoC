@@ -1,0 +1,8 @@
+// Rename to schemes.cypher and replace with your real graph.
+// Ingest compiles this file to graph_compiled.json (no Neo4j required).
+//
+// Example patterns (adjust to your model):
+//
+// MERGE (s:Scheme {name: 'Example Scheme'})
+// MERGE (s)-[:EXCLUDES]->(:Rule {text: 'Not for income above X'})
+// MERGE (s)-[:RELATED_TO]->(t:Scheme {name: 'Another Scheme'})

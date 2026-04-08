@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+
+.streamlit/secrets.toml
+
+# Local vector DB artifacts
+chroma_schemes_db/
+
+# Local/generated data artifacts
+data/Karnataka Schemes.pdf
+*.sqlite3
+*.bin

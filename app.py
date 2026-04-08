@@ -4,124 +4,43 @@ from typing import Any, Dict, List
 from flask import Flask, jsonify, render_template, request
 
 from ingest_karnataka_schemes import DEFAULT_COLLECTION, DEFAULT_DB_PATH, DEFAULT_MODEL
-from orchestrated_rag_schemes import (
-    _ask_gemini_final_answer,
-    _ask_gemini_for_refinements,
-    _build_retriever,
-    _format_context_block,
-    _init_gemini_client,
-    _retrieve,
-    _safe_extract_json_from_gemini,
-)
+from orchestrated_rag_schemes import run_orchestrated_rag_result
+from user_profile import compose_rag_question
 
 
 DEFAULT_LLM_MODEL = "gemini-flash-latest"
+FALLBACK_LLM_MODEL = "gemini-pro-latest"
 
 app = Flask(__name__)
-
-
-def _profile_to_text(profile: Dict[str, Any]) -> str:
-    rows = []
-    order = [
-        "name",
-        "gender",
-        "age",
-        "caste",
-        "residence",
-        "marital_status",
-        "disability_percentage",
-        "employment_status",
-        "occupation",
-        "minority",
-        "below_poverty_line",
-        "economic_distress",
-    ]
-    for key in order:
-        value = (profile.get(key) or "").strip()
-        if value:
-            rows.append(f"- {key.replace('_', ' ').title()}: {value}")
-    return "\n".join(rows)
 
 
 def answer_question(question: str, profile: Dict[str, Any]) -> Dict[str, Any]:
     if not question.strip():
         raise ValueError("Question is required.")
 
-    collection = _build_retriever(
+    composed_question = compose_rag_question(question.strip(), profile)
+
+    result = run_orchestrated_rag_result(
         db_path=DEFAULT_DB_PATH,
         collection_name=DEFAULT_COLLECTION,
         model_name=DEFAULT_MODEL,
-    )
-    client = _init_gemini_client()
-
-    profile_text = _profile_to_text(profile)
-    composed_question = question
-    if profile_text:
-        composed_question = (
-            f"User profile:\n{profile_text}\n\n"
-            f"Question:\n{question}\n\n"
-            "Please consider profile constraints while selecting schemes."
-        )
-
-    docs, metas, _ = _retrieve(collection, question=composed_question, n_results=6)
-    if not docs:
-        return {"answer": "No matching schemes found in the database.", "debug": {}}
-
-    summary_text = "\n".join(f"- {m.get('scheme_name', 'UNKNOWN')} (page {m.get('page', '?')})" for m in metas)
-    raw_refine = _ask_gemini_for_refinements(
-        client,
         llm_model=DEFAULT_LLM_MODEL,
         question=composed_question,
-        context_summary=summary_text,
+        initial_k=6,
+        refined_k=4,
+        fallback_llm_model=FALLBACK_LLM_MODEL,
     )
-    refine_info = _safe_extract_json_from_gemini(raw_refine)
-    sufficient = bool(refine_info.get("sufficient", True))
-    refined_queries: List[str] = list(refine_info.get("refined_queries") or [])
-
-    all_docs = list(docs)
-    all_metas = list(metas)
-    if not sufficient and refined_queries:
-        for rq in refined_queries[:3]:
-            more_docs, more_metas, _ = _retrieve(collection, question=rq, n_results=4)
-            all_docs.extend(more_docs)
-            all_metas.extend(more_metas)
-
-    seen = set()
-    uniq_docs = []
-    uniq_metas = []
-    for d, m in zip(all_docs, all_metas):
-        key = (m.get("scheme_name"), m.get("page"), d.strip())
-        if key in seen:
-            continue
-        seen.add(key)
-        uniq_docs.append(d)
-        uniq_metas.append(m)
-
-    context_block = _format_context_block(uniq_docs, uniq_metas)
-    answer = _ask_gemini_final_answer(
-        client,
-        llm_model=DEFAULT_LLM_MODEL,
-        question=composed_question,
-        context_block=context_block,
-    )
-
-    citations = []
-    for m in uniq_metas[:12]:
-        citations.append(
-            {
-                "scheme_name": m.get("scheme_name"),
-                "page": m.get("page"),
-                "source": m.get("source"),
-            }
-        )
-
+    refine = result.get("refine") or {}
+    dbg = result.get("debug") or {}
     return {
-        "answer": answer.strip(),
-        "citations": citations,
+        "answer": result.get("answer", ""),
+        "citations": result.get("citations") or [],
         "debug": {
-            "sufficient": sufficient,
-            "refined_queries": refined_queries,
-            "retrieved_chunks": len(uniq_docs),
+            "sufficient": refine.get("sufficient"),
+            "refined_queries": refine.get("refined_queries"),
+            "retrieved_chunks": dbg.get("retrieved_chunks"),
+            "graph_context_appended": dbg.get("graph_appended"),
+            "llm_model_used": dbg.get("llm_model_used"),
         },
     }
 
