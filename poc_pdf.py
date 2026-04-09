@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import re
 import textwrap
+import unicodedata
 from io import BytesIO
 from typing import List, Optional
 
@@ -25,15 +26,20 @@ def _normalize_for_pdf(text: str) -> str:
     replacements = {
         "\u20b9": "Rs ",  # rupee sign
         "\u2022": "- ",   # bullet
+        "\u25aa": "- ",
+        "\u25cb": "- ",
         "\u25cf": "- ",
         "\u2013": "-",    # en dash
         "\u2014": "-",    # em dash
         "\u2018": "'",
         "\u2019": "'",
-        "\u201c": '"',
-        "\u201d": '"',
+        "\u201c": "\u0022",
+        "\u201d": "\u0022",
         "\u2026": "...",
         "\xa0": " ",
+        "\u200b": "",    # zero-width space
+        "\ufeff": "",
+        "\u00a0": " ",
     }
     for k, v in replacements.items():
         t = t.replace(k, v)
@@ -43,7 +49,9 @@ def _normalize_for_pdf(text: str) -> str:
 def _latin1_safe(text: str) -> str:
     if not text:
         return ""
-    return _normalize_for_pdf(text).encode("latin-1", errors="replace").decode("latin-1")
+    t = unicodedata.normalize("NFKC", _normalize_for_pdf(text))
+    # Prefer dropping unmappable symbols over a wall of '?' (core fonts are Latin-1).
+    return t.encode("latin-1", errors="ignore").decode("latin-1")
 
 
 def _wrap_long_tokens(s: str, max_chars: int = 52) -> str:
@@ -67,20 +75,19 @@ def _wrap_long_tokens(s: str, max_chars: int = 52) -> str:
 
 def _reflow_extracted_text(text: str) -> str:
     """
-    Some extracted PDF text comes one-word-per-line.
-    Collapse single newlines into spaces, keep paragraph gaps.
+    PDF extract_text() often yields one word per line or huge gaps.
+    Single newlines become spaces; blank lines keep paragraphs readable.
     """
     if not text:
         return ""
     t = _normalize_for_pdf(text).replace("\r\n", "\n").replace("\r", "\n")
-    # Preserve page boundaries as paragraph breaks.
     t = re.sub(r"\s+(Page\s+\d+\s*:)", r"\n\n\1", t, flags=re.IGNORECASE)
+    t = re.sub(r"\n[ \t]*\n+", "\n\n", t)
     blocks = re.split(r"\n\s*\n+", t)
     merged: List[str] = []
     for block in blocks:
-        line = re.sub(r"[\n]+", " ", block)
+        line = re.sub(r"[\n\t]+", " ", block)
         line = re.sub(r" +", " ", line).strip()
-        # Remove repeated markdown-like separators left from extraction.
         line = re.sub(r"\s*[|]+\s*", " ", line)
         if line:
             merged.append(line)
@@ -132,7 +139,8 @@ def strip_markdown_like(text: str) -> str:
             continue
         s = re.sub(r"^#+\s*", "", s)
         s = re.sub(r"^[-*+]\s+", "", s)
-        s = re.sub(r"^\d+\.\s+", "", s)
+        # Only strip single-digit list markers (e.g. markdown "1. item"); keep "23. Scheme name".
+        s = re.sub(r"^[1-9]\.\s+", "", s)
         s = re.sub(r"\*\*([^*]+)\*\*", r"\1", s)
         s = re.sub(r"\*([^*]+)\*", r"\1", s)
         s = re.sub(r"__([^_]+)__", r"\1", s)
@@ -175,10 +183,10 @@ def build_scheme_kit_pdf(
 
     pdf.set_font("Helvetica", "B", 16)
     pdf.cell(0, 10, "Karnataka scheme - application kit (PoC)", ln=True)
-    pdf.set_font("Helvetica", "", 9)
+    pdf.set_font("Helvetica", "", 10)
     pdf.multi_cell(
         text_w,
-        5,
+        5.5,
         "Demonstration only. Confirm scheme rules and forms on official government portals.",
     )
     pdf.ln(3)
@@ -204,12 +212,13 @@ def build_scheme_kit_pdf(
 
     pdf.set_font("Helvetica", "B", 11)
     pdf.cell(0, 7, "Details for this scheme", ln=True)
-    pdf.set_font("Helvetica", "", 10)
-    details = _reflow_extracted_text(strip_markdown_like(scheme_details_plain))[:9000]
+    pdf.set_font("Helvetica", "", 11)
+    # Long schemes (e.g. CMEGP) need headroom after reflow; fpdf handles multi-page.
+    details = _reflow_extracted_text(strip_markdown_like(scheme_details_plain))[:28000]
     if details.strip():
         for para in _paragraphs(details):
-            pdf.multi_cell(text_w, 5.5, _latin1_safe(para), wrapmode=WrapMode.WORD)
-            pdf.ln(1.2)
+            pdf.multi_cell(text_w, 6.2, _latin1_safe(para), wrapmode=WrapMode.WORD)
+            pdf.ln(2)
     else:
         pdf.multi_cell(text_w, 6, "(No scheme text available from the local index for this selection.)")
     pdf.ln(2)

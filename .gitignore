@@ -10,3 +10,6 @@ chroma_schemes_db/
 data/Karnataka Schemes.pdf
 *.sqlite3
 *.bin
+
+# Local rollback snapshots (copy out if you need them elsewhere)
+backup_before_source_pdf/

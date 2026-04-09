@@ -32,6 +32,7 @@ if _CONTENT_DIR not in sys.path:
 
 from graph_scheme_documents import load_scheme_documents_from_cypher
 from ingest_karnataka_schemes import DEFAULT_COLLECTION, DEFAULT_DB_PATH, DEFAULT_MODEL
+from scheme_source_pdf import extract_scheme_text_from_source_pdf
 from orchestrated_rag_schemes import (
     DEFAULT_GEMINI_MODEL,
     _build_retriever,
@@ -347,36 +348,57 @@ def main() -> None:
                 docs_map = load_scheme_documents_from_cypher()
                 documents = docs_map.get(scheme_name, [])
 
-                docs_r, metas_r = get_documents_for_scheme_only(col, scheme_name)
-                first_snip = docs_r[0] if docs_r else ""
                 if choice_idx < len(extracted_scheme_names) and (extracted_scheme_names[choice_idx] or "").strip():
                     title_disp = extracted_scheme_names[choice_idx].strip()
                 else:
-                    title_disp = scheme_heading_title(scheme_name, first_snip)
-                # Keep PDF details focused on the selected scheme only and avoid noisy page headings.
-                picked_details: List[str] = []
-                seen_snips = set()
-                for d, m in zip(docs_r, metas_r):
-                    meta_name = (m.get("scheme_name") or "").strip().lower()
-                    if meta_name and meta_name != scheme_name.strip().lower():
-                        continue
-                    clean = strip_markdown_like(d or "").strip()
-                    clean = clean.replace("\r", "\n")
-                    clean = re.sub(r"\bPage\s+\d+\s*:\s*", "", clean, flags=re.IGNORECASE)
-                    if not clean:
-                        continue
-                    sig = clean[:220]
-                    if sig in seen_snips:
-                        continue
-                    seen_snips.add(sig)
-                    picked_details.append(clean)
-                    if len(picked_details) >= 8:
-                        break
-                if not picked_details:
-                    fallback_text = (selected.get("text_for_label") or selected.get("snippet") or "").strip()
-                    if fallback_text:
-                        picked_details = [strip_markdown_like(fallback_text)]
-                scheme_details_plain = "\n\n".join(picked_details)
+                    title_disp = scheme_heading_title(scheme_name, "")
+
+                # Prefer full scheme text from the original Karnataka Schemes PDF (same blocks as ingest).
+                # Score against both the resolved DB name and the label shown in the picker (often closer to the PDF heading).
+                source_body, source_note = extract_scheme_text_from_source_pdf(
+                    scheme_name,
+                    alternate_names=[title_disp] if title_disp and title_disp != scheme_name else [],
+                )
+                scheme_details_plain = ""
+                if (source_body or "").strip():
+                    scheme_details_plain = strip_markdown_like(source_body).strip()
+                    st.caption(
+                        "Scheme details below are **one section only**, copied from **data/Karnataka Schemes.pdf** "
+                        "(the numbered block that best matches your choice)."
+                    )
+                else:
+                    docs_r, metas_r = get_documents_for_scheme_only(col, scheme_name)
+                    first_snip = docs_r[0] if docs_r else ""
+                    if choice_idx >= len(extracted_scheme_names) or not (
+                        extracted_scheme_names[choice_idx] or ""
+                    ).strip():
+                        title_disp = scheme_heading_title(scheme_name, first_snip)
+                    picked_details: List[str] = []
+                    seen_snips = set()
+                    for d, m in zip(docs_r, metas_r):
+                        meta_name = (m.get("scheme_name") or "").strip().lower()
+                        if meta_name and meta_name != scheme_name.strip().lower():
+                            continue
+                        clean = strip_markdown_like(d or "").strip()
+                        clean = clean.replace("\r", "\n")
+                        clean = re.sub(r"\bPage\s+\d+\s*:\s*", "", clean, flags=re.IGNORECASE)
+                        if not clean:
+                            continue
+                        sig = clean[:220]
+                        if sig in seen_snips:
+                            continue
+                        seen_snips.add(sig)
+                        picked_details.append(clean)
+                        # Cap only indexed fallback (source PDF is preferred). Higher cap so one scheme is not truncated mid-document.
+                        if len(picked_details) >= 12:
+                            break
+                    if not picked_details:
+                        fallback_text = (selected.get("text_for_label") or selected.get("snippet") or "").strip()
+                        if fallback_text:
+                            picked_details = [strip_markdown_like(fallback_text)]
+                    scheme_details_plain = "\n\n".join(picked_details)
+                    if source_note:
+                        st.caption(f"Source PDF: {source_note} — using indexed text instead.")
                 addr_block = build_geocode_query(
                     line1=address_line,
                     pincode=pincode,
