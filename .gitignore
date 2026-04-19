@@ -13,3 +13,7 @@ data/Karnataka Schemes.pdf
 
 # Local rollback snapshots (copy out if you need them elsewhere)
 backup_before_source_pdf/
+
+# MS Office lock / recovery files (never commit)
+~$*
+~WRL*.tmp

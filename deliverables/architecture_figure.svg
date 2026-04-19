@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 1280" width="920" height="1280">
+  <defs>
+    <style type="text/css"><![CDATA[
+      .title { font-family: Segoe UI, Arial, sans-serif; font-size: 20px; font-weight: bold; fill: #1a1a1a; }
+      .subtitle { font-family: Segoe UI, Arial, sans-serif; font-size: 12px; fill: #444; }
+      .box-body { font-family: Segoe UI, Arial, sans-serif; font-size: 9.5px; fill: #1a1a1a; }
+      .box-body-sm { font-family: Segoe UI, Arial, sans-serif; font-size: 8.5px; fill: #333; }
+      .legend { font-family: Segoe UI, Arial, sans-serif; font-size: 11px; fill: #222; }
+      .note { font-family: Segoe UI, Arial, sans-serif; font-size: 10px; fill: #333; font-style: italic; }
+      .arrow { stroke: #555; stroke-width: 1.5; fill: none; marker-end: url(#arrowhead); }
+      .arrow-dashed { stroke: #c45c00; stroke-width: 1.5; stroke-dasharray: 6 4; fill: none; marker-end: url(#arrowhead-orange); }
+    ]]></style>
+    <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#555"/>
+    </marker>
+    <marker id="arrowhead-orange" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#c45c00"/>
+    </marker>
+  </defs>
+
+  <!-- Title: ASCII + numeric entities only in text nodes -->
+  <text x="460" y="36" text-anchor="middle" class="title">Karnataka Schemes AI - PoC architecture</text>
+  <text x="460" y="56" text-anchor="middle" class="subtitle">Modules, technologies, and roadmap (planned items dashed)</text>
+
+  <!-- Legend -->
+  <rect x="40" y="72" width="280" height="52" rx="6" fill="#f8f9fa" stroke="#dee2e6"/>
+  <rect x="52" y="84" width="16" height="12" rx="2" fill="#2e7d32"/>
+  <text x="76" y="94" class="legend">Implemented in PoC</text>
+  <rect x="52" y="102" width="16" height="12" rx="2" fill="#fff3e0" stroke="#e65100" stroke-width="1.5" stroke-dasharray="4 3"/>
+  <text x="76" y="112" class="legend">Planned / not built yet (guardrails, governance, etc.)</text>
+
+  <rect x="340" y="72" width="540" height="52" rx="6" fill="#e3f2fd" stroke="#1976d2"/>
+  <text x="360" y="92" class="legend" font-weight="bold">Cursor (this environment)</text>
+  <text x="360" y="108" class="note">AI-assisted IDE for design, coding, docs, and diagrams - not part of runtime deployment.</text>
+
+  <!-- Row 1: Sources -->
+  <rect x="40" y="140" width="200" height="88" rx="8" fill="#e8f5e9" stroke="#2e7d32" stroke-width="2"/>
+  <text x="50" y="158" class="box-body" font-weight="bold">Sources</text>
+  <text x="50" y="176" class="box-body">- data/Karnataka Schemes.pdf</text>
+  <text x="50" y="192" class="box-body">- schemes.cypher (rules to JSON)</text>
+  <text x="50" y="208" class="box-body-sm">Tech: files on disk</text>
+
+  <rect x="260" y="140" width="200" height="88" rx="8" fill="#e8f5e9" stroke="#2e7d32" stroke-width="2"/>
+  <text x="270" y="158" class="box-body" font-weight="bold">Ingestion</text>
+  <text x="270" y="176" class="box-body">ingest_karnataka_schemes.py</text>
+  <text x="270" y="192" class="box-body">Tech: pypdf, Chroma API</text>
+  <text x="270" y="208" class="box-body-sm">Embeddings: SentenceTransformers</text>
+
+  <rect x="480" y="140" width="200" height="88" rx="8" fill="#e8f5e9" stroke="#2e7d32" stroke-width="2"/>
+  <text x="490" y="158" class="box-body" font-weight="bold">Local knowledge store</text>
+  <text x="490" y="176" class="box-body">Chroma (persistent)</text>
+  <text x="490" y="192" class="box-body">graph_compiled.json</text>
+  <text x="490" y="208" class="box-body-sm">Default: all-MiniLM-L6-v2</text>
+
+  <rect x="700" y="140" width="180" height="88" rx="8" fill="#e8f5e9" stroke="#2e7d32" stroke-width="2"/>
+  <text x="710" y="158" class="box-body" font-weight="bold">Supporting libs</text>
+  <text x="710" y="176" class="box-body">graph_knowledge.py</text>
+  <text x="710" y="192" class="box-body">graph_scheme_documents.py</text>
+  <text x="710" y="208" class="box-body-sm">Regex / filter, no Neo4j</text>
+
+  <!-- Arrows row1 to row2 -->
+  <path d="M 140 228 L 140 268" class="arrow"/>
+  <path d="M 360 228 L 360 268" class="arrow"/>
+  <path d="M 580 228 L 580 268" class="arrow"/>
+  <path d="M 790 228 L 790 268" class="arrow"/>
+
+  <!-- Row 2: Orchestration -->
+  <rect x="40" y="268" width="400" height="110" rx="8" fill="#e3f2fd" stroke="#1565c0" stroke-width="2"/>
+  <text x="50" y="288" class="box-body" font-weight="bold">Orchestrated RAG - orchestrated_rag_schemes.py</text>
+  <text x="50" y="306" class="box-body">Retrieve (Chroma) - optional Gemini refine - merge/dedupe - graph add-on - final answer</text>
+  <text x="50" y="322" class="box-body">Tech: chromadb, google-genai (Gemini)</text>
+  <text x="50" y="338" class="box-body-sm">Env: GEMINI_API_KEY, GEMINI_CONTEXT_CHUNK_CHARS, pacing / skip-refinement flags</text>
+  <text x="50" y="354" class="box-body-sm">Exports: run_orchestrated_rag_result - answer, citations, debug</text>
+
+  <rect x="460" y="268" width="420" height="110" rx="8" fill="#e8f5e9" stroke="#2e7d32" stroke-width="2"/>
+  <text x="470" y="288" class="box-body" font-weight="bold">LLM (cloud)</text>
+  <text x="470" y="306" class="box-body">Google Gemini (e.g. gemini-flash-latest, gemini-pro-latest)</text>
+  <text x="470" y="322" class="box-body">Refinement + final generation calls</text>
+  <text x="470" y="338" class="box-body-sm">Fallback model on some errors (orchestrator)</text>
+
+  <path d="M 440 323 L 458 323" class="arrow"/>
+
+  <!-- Row 3: UI -->
+  <rect x="40" y="400" width="280" height="100" rx="8" fill="#f3e5f5" stroke="#6a1b9a" stroke-width="2"/>
+  <text x="50" y="420" class="box-body" font-weight="bold">Streamlit PoC - poc_streamlit.py</text>
+  <text x="50" y="438" class="box-body">Profile, RAG Q&amp;A, scheme picker, PDF kit</text>
+  <text x="50" y="454" class="box-body">scheme_source_pdf.py (ground kit from PDF)</text>
+  <text x="50" y="470" class="box-body-sm">Tech: streamlit</text>
+
+  <rect x="340" y="400" width="200" height="100" rx="8" fill="#f3e5f5" stroke="#6a1b9a" stroke-width="2"/>
+  <text x="350" y="420" class="box-body" font-weight="bold">Flask API - app.py</text>
+  <text x="350" y="438" class="box-body">/api/ask - same RAG result</text>
+  <text x="350" y="454" class="box-body-sm">Tech: flask</text>
+
+  <rect x="560" y="400" width="320" height="100" rx="8" fill="#e8f5e9" stroke="#2e7d32" stroke-width="2"/>
+  <text x="570" y="420" class="box-body" font-weight="bold">PDF kit + optional geo</text>
+  <text x="570" y="438" class="box-body">poc_pdf.py (fpdf2) - user_profile - scheme_choice_label</text>
+  <text x="570" y="454" class="box-body">poc_nearby.py - Nominatim (OSM)</text>
+
+  <path d="M 240 378 L 240 400" class="arrow"/>
+  <path d="M 440 378 L 440 400" class="arrow"/>
+  <path d="M 670 378 L 670 400" class="arrow"/>
+
+  <!-- Row 4: Planned -->
+  <rect x="40" y="520" width="840" height="100" rx="8" fill="#fff3e0" stroke="#e65100" stroke-width="2" stroke-dasharray="8 5"/>
+  <text x="50" y="542" class="box-body" font-weight="bold" fill="#bf360c">Planned - not implemented in PoC (roadmap)</text>
+  <text x="50" y="560" class="box-body">Guardrails: relevance thresholds, abstention, structured output, claim verification, PII-safe logging</text>
+  <text x="50" y="576" class="box-body">Privacy &amp; governance: data minimization, RBAC, corpus/model versioning, audit metadata, vendor/compliance alignment</text>
+  <text x="50" y="592" class="box-body">Optional stack swaps: other vector DBs, LLM providers, LangChain/LlamaIndex - customer-specific</text>
+  <text x="50" y="608" class="box-body-sm">Shown as dashed to separate product vision from current codebase behaviour.</text>
+
+  <path d="M 240 500 L 240 520" class="arrow-dashed"/>
+  <path d="M 440 500 L 240 510" class="arrow-dashed"/>
+  <text x="250" y="512" class="note" fill="#bf360c">future hooks</text>
+
+  <!-- Cursor box -->
+  <rect x="40" y="640" width="840" height="120" rx="8" fill="#eceff1" stroke="#455a64" stroke-width="2"/>
+  <text x="460" y="666" text-anchor="middle" class="box-body" font-weight="bold">Development workflow (not runtime)</text>
+  <text x="460" y="688" text-anchor="middle" class="box-body">Cursor - AI-assisted integrated development environment (IDE)</text>
+  <text x="460" y="708" text-anchor="middle" class="note">Used to author, refactor, and document Python/Streamlit/Flask code, generate deliverables (e.g. Word/PPT), and produce this diagram.</text>
+  <text x="460" y="730" text-anchor="middle" class="box-body-sm">Does not host data, serve users, or call Gemini at production runtime. Your deployed stack = PDF + Chroma + app + Gemini only.</text>
+
+  <path d="M 460 628 L 460 640" class="arrow"/>
+  <text x="470" y="632" class="subtitle" font-size="10px">engineering / docs</text>
+
+  <!-- Alt technologies footnote -->
+  <rect x="40" y="780" width="840" height="72" rx="6" fill="#fafafa" stroke="#bdbdbd"/>
+  <text x="50" y="800" class="box-body" font-weight="bold">Alternatives (design-time choices, not all deployed)</text>
+  <text x="50" y="818" class="box-body-sm">Vector: Qdrant, Milvus, pgvector - Embeddings/LLM: OpenAI, Anthropic, Azure, local vLLM - UI/API: FastAPI, Next.js</text>
+  <text x="50" y="834" class="box-body-sm">Orchestration frameworks: LangChain, LlamaIndex, Haystack - PoC uses explicit Python for clarity.</text>
+
+  <!-- Simple flow strip -->
+  <text x="460" y="890" text-anchor="middle" class="subtitle" font-weight="bold">End-to-end data flow (simplified)</text>
+  <rect x="40" y="900" width="140" height="44" rx="6" fill="#e8f5e9" stroke="#2e7d32"/>
+  <text x="110" y="926" text-anchor="middle" class="box-body">PDF + rules</text>
+  <text x="190" y="924" class="legend">&gt;</text>
+  <rect x="210" y="900" width="140" height="44" rx="6" fill="#e8f5e9" stroke="#2e7d32"/>
+  <text x="280" y="926" text-anchor="middle" class="box-body">Ingest + index</text>
+  <text x="360" y="924" class="legend">&gt;</text>
+  <rect x="380" y="900" width="140" height="44" rx="6" fill="#e3f2fd" stroke="#1565c0"/>
+  <text x="450" y="926" text-anchor="middle" class="box-body">RAG + Gemini</text>
+  <text x="530" y="924" class="legend">&gt;</text>
+  <rect x="550" y="900" width="140" height="44" rx="6" fill="#f3e5f5" stroke="#6a1b9a"/>
+  <text x="620" y="926" text-anchor="middle" class="box-body">UI / API / PDF</text>
+  <text x="700" y="924" class="legend">&gt;</text>
+  <rect x="720" y="900" width="160" height="44" rx="6" fill="#fff3e0" stroke="#e65100" stroke-dasharray="5 4"/>
+  <text x="800" y="920" text-anchor="middle" class="box-body">Future:</text>
+  <text x="800" y="934" text-anchor="middle" class="box-body-sm">guardrails + gov.</text>
+
+  <text x="460" y="980" text-anchor="middle" class="subtitle">Figure: architecture_figure.svg - generated for stakeholder decks; edit in Inkscape, Illustrator, or insert into Word/PowerPoint.</text>
+</svg>

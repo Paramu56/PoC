@@ -11,6 +11,11 @@ from typing import Any, Dict, List, Optional, Tuple
 
 _FALLBACK_RE = re.compile(r"^Karnataka Schemes \(page (\d+)\)\s*$", re.IGNORECASE)
 
+
+def is_fallback_scheme_metadata_name(name: str) -> bool:
+    """True when Chroma metadata used the PDF page fallback label instead of a real scheme name."""
+    return bool(name and _FALLBACK_RE.match(name.strip()))
+
 # Lines that look like eligibility / process, not scheme titles
 _ELIGIBILITY_START = re.compile(
     r"^\d+\.\s*(Age|Educational|Income|Annual|Must|Should|The\s+applicant|Family|"

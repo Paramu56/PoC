@@ -7,7 +7,7 @@ from difflib import SequenceMatcher
 from textwrap import dedent
 from typing import Any, Dict, List, Optional, Tuple
 
-from scheme_choice_label import extract_scheme_title_line
+from scheme_choice_label import extract_scheme_title_line, is_fallback_scheme_metadata_name
 
 import chromadb
 from chromadb.utils import embedding_functions
@@ -276,13 +276,17 @@ def match_extracted_names_to_choices(
             if not cn:
                 continue
             if exn == cn:
-                return 1.0
+                best = 1.0
+                break
             if exn in cn or cn in exn:
                 best = max(best, 0.92)
             elif len(exn) > 5 and exn in cn:
                 best = max(best, 0.88)
             else:
                 best = max(best, SequenceMatcher(None, exn, cn).ratio())
+        # Deprioritize rows whose metadata is only "Karnataka Schemes (page N)" so real scheme rows win.
+        if is_fallback_scheme_metadata_name((ch.get("scheme_name") or "").strip()):
+            best *= 0.28
         return best
 
     if not extracted_names or not context_choices:
@@ -313,9 +317,12 @@ def match_extracted_names_to_choices(
             used.add(picked)
             out.append(context_choices[picked])
             continue
-        # No score passed: still consume one context row in order (keeps N names ≈ N rows)
+        # No score passed: still consume one context row in order (keeps N names ≈ N rows).
+        # Never fall back to generic "Karnataka Schemes (page N)" rows — those are not selectable schemes.
         for i, ch in enumerate(context_choices):
             if i in used:
+                continue
+            if is_fallback_scheme_metadata_name((ch.get("scheme_name") or "").strip()):
                 continue
             used.add(i)
             out.append(ch)
